@@ -99,3 +99,14 @@ class Broker(object):
         raise NotImplementedError(
             "Should implement submit_order()"
         )
+    
+    @abstractmethod
+    def get_executed_orders(self):
+        raise NotImplementedError(
+            "Should implement get_executed_orders()"
+        )
+    @abstractmethod
+    def clear_executed_orders(self):
+        raise NotImplementedError(
+            "Should implement clear_executed_orders()"
+        )

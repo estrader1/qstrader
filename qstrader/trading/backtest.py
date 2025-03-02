@@ -1,5 +1,8 @@
 import os
 
+# for stats deep copy
+import copy
+
 import pandas as pd
 
 from qstrader.asset.equity import Equity
@@ -312,7 +315,7 @@ class BacktestTradingSession(TradingSession):
 
         return qts
 
-    def _update_equity_curve(self, dt):
+    def _update_equity_curve(self, dt,stats):
         """
         Update the equity curve values.
 
@@ -321,9 +324,37 @@ class BacktestTradingSession(TradingSession):
         dt : `pd.Timestamp`
             The time at which the total account equity is obtained.
         """
+
+        total_equity = self.broker.get_account_total_equity()["master"]
         self.equity_curve.append(
-            (dt, self.broker.get_account_total_equity()["master"])
+            (dt, total_equity)
         )
+
+        stats['equity_curve'].append((dt, total_equity))
+
+    def _record_portfolio_snapshot(self, dt, stats):
+        """
+        Records a snapshot of the portfolio, including asset details and cash.
+        """
+        snapshot = {
+            'date': dt,
+            'assets': {}
+        }
+
+        # Get current portfolio holdings from the broker.  This is the key.
+        current_portfolio = self.broker.get_portfolio_as_dict(self.portfolio_id)
+
+        for asset, details in current_portfolio.items():
+            snapshot['assets'][asset] = {
+                'net_quantity': details['quantity'],
+                'market_value': details['market_value'],
+                'current_price': self.data_handler.get_asset_latest_mid_price(dt, asset)  # Get *current* price
+            }
+
+        snapshot['cash'] = self.broker.get_portfolio_cash_balance(self.portfolio_id)  # Explicitly get portfolio cash
+        stats['portfolio_snapshots'].append(copy.deepcopy(snapshot))
+
+
 
     def output_holdings(self):
         """
@@ -364,6 +395,103 @@ class BacktestTradingSession(TradingSession):
         if self.burn_in_dt is not None:
             alloc_df = alloc_df[self.burn_in_dt.date():]
         return alloc_df
+  
+    def get_stats_dataframe(self):
+        """
+        Creates DataFrames from the stats dictionary.
+        """
+        stats_dfs = {}
+
+        # Handle simple time series data (like equity_curve)
+        if 'equity_curve' in self.stats:
+            stats_dfs['equity_curve'] = pd.DataFrame(
+                self.stats['equity_curve'], columns=['Date', 'Equity']
+            ).set_index('Date')
+
+        # Handle portfolio snapshots.  NEW BLOCK.
+        if 'portfolio_snapshots' in self.stats:
+            df_list = []
+            for snapshot in self.stats['portfolio_snapshots']:
+                date = snapshot['date']
+                assets_data = snapshot['assets']
+                cash = snapshot['cash']
+
+                # Create a list of dictionaries, one for each asset
+                asset_rows = []
+                for asset, details in assets_data.items():
+                    row = {
+                        'Date': date,
+                        'Asset': asset,
+                        'NetQuantity': details['net_quantity'],
+                        'MarketValue': details['market_value'],
+                        'CurrentPrice': details['current_price'],
+                    }
+                    asset_rows.append(row)
+
+                # Add cash as a separate entry
+                asset_rows.append({
+                    'Date': date,
+                    'Asset': 'Cash',  # Use a consistent label for cash
+                    'NetQuantity': None,  # Cash doesn't have a quantity
+                    'MarketValue': cash,
+                    'CurrentPrice': None,  # Cash doesn't have a price
+                })
+                #creating individual dataframes
+                temp_df = pd.DataFrame(asset_rows)
+                if not temp_df.empty:
+                    temp_df.set_index('Date', inplace=True)
+                    df_list.append(temp_df)
+
+            if df_list:
+                stats_dfs['portfolio_snapshots'] = pd.concat(df_list)
+
+        # Handle weights/portfolio data
+        for key in [
+            'alpha_weights', 'risk_weights', 'optimised_weights',
+            'target_portfolio', 'current_portfolio', 'rebalance_orders',
+            'executed_orders'
+        ]:
+            if key in self.stats:
+                df_list = []
+                for entry in self.stats[key]:
+                    date = entry['date']
+                    event = entry.get('event', None)
+
+                    if key in ('target_portfolio', 'current_portfolio'):
+                        data = entry['portfolio']
+                    elif key in ('alpha_weights', 'risk_weights', 'optimised_weights'):
+                        data = entry['weights']
+                    elif key == 'rebalance_orders':
+                        data = entry['orders']
+                    elif key == 'executed_orders':
+                        data = entry
+
+                    else:
+                        data = None  # Should not happen
+
+                    if data is None:
+                        continue
+
+                    # Handle dictionaries and lists of dictionaries
+                    if isinstance(data, dict):
+                        df_list.append(pd.DataFrame([data], index=[date]))
+
+                    elif isinstance(data, list):
+                        temp_df = pd.DataFrame(data)
+                        temp_df['Date'] = date
+                        temp_df['Event'] = event
+                        if not temp_df.empty:
+                            df_list.append(temp_df.set_index('Date'))
+
+
+                    else:
+                        print(f"Unexpected data type for {key}: {type(data)}")
+                        continue
+
+                if df_list:
+                    stats_dfs[key] = pd.concat(df_list)
+
+        return stats_dfs
 
     def run(self, results=False):
         """
@@ -379,7 +507,21 @@ class BacktestTradingSession(TradingSession):
         if settings.PRINT_EVENTS:
             print("Beginning backtest simulation...")
 
-        stats = {'target_allocations': []}
+        stats = {
+            'dates': [],
+            'events': [],
+            'alpha_weights': [],
+            'risk_weights': [],
+            'optimised_weights': [],
+            'target_portfolio': [],
+            'current_portfolio': [],
+            'rebalance_orders': [],
+            'executed_orders': [],
+            'equity_curve': [],
+            'portfolio_snapshots': [],
+        }
+
+        self.stats = stats
 
         for event in self.sim_engine:
             # Output the system event and timestamp
@@ -387,12 +529,28 @@ class BacktestTradingSession(TradingSession):
             if settings.PRINT_EVENTS:
                 print("(%s) - %s" % (event.ts, event.event_type))
 
+            # Record date and event type.  NEW LINES.
+            stats['dates'].append(dt)
+            stats['events'].append(event.event_type)
+
             # Update the simulated broker
             self.broker.update(dt)
 
+            # if event.event_type == "market_open":
+            # might extend this in future to trade at current close or average of next open ohlc.
+            # so not filtering for market_open now. 
+            executed_orders = self.broker.get_executed_orders()
+            if executed_orders:
+                stats['executed_orders'].extend(executed_orders)
+                self.broker.clear_executed_orders() #reset after appending to stats
+
+            self._record_portfolio_snapshot(dt, stats)
+            
             # Update any signals on a daily basis
             if self.signals is not None and event.event_type == "market_close":
                 self.signals.update(dt)
+
+            
 
             # If we have hit a rebalance time then carry
             # out a full run of the quant trading system
@@ -404,7 +562,7 @@ class BacktestTradingSession(TradingSession):
                                 "(%s) - trading logic "
                                 "and rebalance" % event.ts
                             )
-                        self.qts(dt, stats=stats)
+                        self.qts(dt, event=event, stats=stats)
             else:
                 if self._is_rebalance_event(dt):
                     if settings.PRINT_EVENTS:
@@ -412,7 +570,7 @@ class BacktestTradingSession(TradingSession):
                             "(%s) - trading logic "
                             "and rebalance" % event.ts
                         )
-                    self.qts(dt, stats=stats)
+                    self.qts(dt, event=event, stats=stats)
 
             # Out of market hours we want a daily
             # performance update, but only if we
@@ -420,11 +578,11 @@ class BacktestTradingSession(TradingSession):
             if event.event_type == "market_close":
                 if self.burn_in_dt is not None:
                     if dt >= self.burn_in_dt:
-                        self._update_equity_curve(dt)
+                        self._update_equity_curve(dt,stats)
                 else:
-                    self._update_equity_curve(dt)
+                    self._update_equity_curve(dt,stats)
 
-        self.target_allocations = stats['target_allocations']
+        self.target_allocations = stats['target_portfolio']
 
         # At the end of the simulation output the
         # portfolio holdings if desired

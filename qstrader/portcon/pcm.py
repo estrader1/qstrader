@@ -1,6 +1,8 @@
 from qstrader import settings
 from qstrader.execution.order import Order
 
+import copy
+
 
 class PortfolioConstructionModel(object):
     """
@@ -231,7 +233,7 @@ class PortfolioConstructionModel(object):
         assets = self.universe.get_assets(dt)
         return {asset: 0.0 for asset in assets}
 
-    def __call__(self, dt, stats=None):
+    def __call__(self, dt, event=None, stats=None):
         """
         Execute the portfolio construction process at a particular
         provided date-time.
@@ -261,13 +263,28 @@ class PortfolioConstructionModel(object):
         else:
             weights = self._create_zero_target_weights_vector(dt)
 
+        if stats is not None:
+            stats['alpha_weights'].append(
+                {'date': dt, 'event': event.event_type if event else None, 'weights': copy.deepcopy(weights)}
+            )
+
         # If a risk model is present use it to potentially
         # override the alpha model weights
         if self.risk_model:
             weights = self.risk_model(dt, weights)
 
+        if stats is not None:
+            stats['risk_weights'].append(
+               {'date': dt, 'event': event.event_type if event else None, 'weights': copy.deepcopy(weights)}
+            )
+
         # Run the portfolio optimisation
         optimised_weights = self.optimiser(dt, initial_weights=weights)
+
+        if stats is not None:
+            stats['optimised_weights'].append(
+                {'date': dt, 'event': event.event_type if event else None, 'weights': copy.deepcopy(weights)}
+            )
 
         # Ensure any Assets in the Broker Portfolio are sold out if
         # they are not specifically referenced on the optimised weights
@@ -282,21 +299,52 @@ class PortfolioConstructionModel(object):
             )
 
         # TODO: Improve this with a full statistics logging handler
-        if stats is not None:
-            alloc_dict = {'Date': dt}
-            alloc_dict.update(full_weights)
-            stats['target_allocations'].append(alloc_dict)
+        # Removing this for now.
+        # if stats is not None:
+            # alloc_dict = {'Date': dt}
+            # alloc_dict.update(full_weights)
+            # stats['target_allocations'].append(alloc_dict)
 
         # Calculate target portfolio in notional
         target_portfolio = self._generate_target_portfolio(dt, full_weights)
 
+        if stats is not None:
+            target_portfolio_with_prices = {}
+            for asset, details in target_portfolio.items():
+                # Get the sizing price *here*, before it's potentially
+                # modified by the broker.
+                sizing_price = self.data_handler.get_asset_latest_ask_price(dt, asset)
+                target_portfolio_with_prices[asset] = {
+                    'quantity': details['quantity'],
+                    'sizing_price': sizing_price
+                }
+
+        stats['target_portfolio'].append(
+                {'date': dt, 'event': event.event_type if event else None, 'portfolio': copy.deepcopy(target_portfolio_with_prices)}
+            )
+
         # Obtain current Broker account portfolio
         current_portfolio = self._obtain_current_portfolio()
+
+        if stats is not None:
+            stats['current_portfolio'].append(
+                {'date': dt, 'event': event.event_type if event else None, 'portfolio': copy.deepcopy(current_portfolio)}
+            )
 
         # Create rebalance trade Orders
         rebalance_orders = self._generate_rebalance_orders(
             dt, target_portfolio, current_portfolio
         )
+
+        if stats is not None:
+            # Convert Order objects to dictionaries.  NEW BLOCK.
+            order_dicts = [
+                {'asset': order.asset, 'quantity': order.quantity, 'order_id': order.order_id}
+                for order in rebalance_orders
+            ]
+            stats['rebalance_orders'].append(
+                {'date': dt, 'event': event.event_type if event else None, 'orders': order_dicts}
+            )
         # TODO: Implement cost model
 
         return rebalance_orders

@@ -74,6 +74,8 @@ class SimulatedBroker(Broker):
         if settings.PRINT_EVENTS:
             print('Initialising simulated broker "%s"...' % self.account_id)
 
+        self.executed_orders = [] 
+
     def _set_base_currency(self, base_currency):
         """
         Check and set the base currency from a list of
@@ -600,6 +602,18 @@ class SimulatedBroker(Broker):
             order.asset, scaled_quantity, self.current_dt,
             price, order.order_id, commission=total_commission
         )
+
+        self.executed_orders.append(
+            {
+                'date': self.current_dt,
+                'asset': order.asset,
+                'quantity': scaled_quantity,  # Use scaled_quantity
+                'price': price,
+                'order_id': order.order_id,
+                'commission': total_commission
+            }
+        )
+
         self.portfolios[portfolio_id].transact_asset(txn)
         if settings.PRINT_EVENTS:
             print(
@@ -610,6 +624,12 @@ class SimulatedBroker(Broker):
                     consideration + total_commission
                 )
             )
+
+    def get_executed_orders(self):
+        return self.executed_orders
+
+    def clear_executed_orders(self):
+        self.executed_orders = []
 
     def submit_order(self, portfolio_id, order):
         """
