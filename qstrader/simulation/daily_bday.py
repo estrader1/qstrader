@@ -81,27 +81,27 @@ class DailyBusinessDaySimulationEngine(SimulationEngine):
             if self.pre_market:
                 yield SimulationEvent(
                     pd.Timestamp(
-                        datetime.datetime(year, month, day), tz='UTC'
+                        datetime.datetime(year, month, day), tz='America/New_York'
                     ), event_type="pre_market"
                 )
 
             yield SimulationEvent(
                 pd.Timestamp(
-                    datetime.datetime(year, month, day, 14, 30),
-                    tz=pytz.utc
+                    datetime.datetime(year, month, day, 9, 30),
+                    tz='America/New_York'
                 ), event_type="market_open"
             )
 
             yield SimulationEvent(
                 pd.Timestamp(
-                    datetime.datetime(year, month, day, 21, 00),
-                    tz=pytz.utc
+                    datetime.datetime(year, month, day, 16, 00),
+                    tz='America/New_York'
                 ), event_type="market_close"
             )
 
             if self.post_market:
                 yield SimulationEvent(
                     pd.Timestamp(
-                        datetime.datetime(year, month, day, 23, 59), tz='UTC'
+                        datetime.datetime(year, month, day, 23, 59), tz='America/New_York'
                     ), event_type="post_market"
                 )

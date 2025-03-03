@@ -95,7 +95,8 @@ class CSVDailyBarDataSource(object):
         ).sort_index()
 
         # Ensure all timestamps are set to UTC for consistency
-        csv_df = csv_df.set_index(csv_df.index.tz_localize(pytz.UTC))
+        # csv_df = csv_df.set_index(csv_df.index.tz_localize(pytz.UTC))
+        csv_df = csv_df.set_index(csv_df.index.tz_localize('America/New_York'))
         return csv_df
 
     def _load_csvs_into_dfs(self):
@@ -167,8 +168,8 @@ class CSVDailyBarDataSource(object):
         # appropriately timestamped
         seq_oc_df = oc_df.T.unstack(level=0).reset_index()
         seq_oc_df.columns = ['Date', 'Market', 'Price']
-        seq_oc_df.loc[seq_oc_df['Market'] == 'Open', 'Date'] += pd.Timedelta(hours=14, minutes=30)
-        seq_oc_df.loc[seq_oc_df['Market'] == 'Close', 'Date'] += pd.Timedelta(hours=21, minutes=00)
+        seq_oc_df.loc[seq_oc_df['Market'] == 'Open', 'Date'] += pd.Timedelta(hours=9, minutes=30)
+        seq_oc_df.loc[seq_oc_df['Market'] == 'Close', 'Date'] += pd.Timedelta(hours=16, minutes=00)
 
         # TODO: Unable to distinguish between Bid/Ask, implement later
         dp_df = seq_oc_df[['Date', 'Price']]

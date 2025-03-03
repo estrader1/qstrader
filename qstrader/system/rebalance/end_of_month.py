@@ -50,7 +50,7 @@ class EndOfMonthRebalance(Rebalance):
         `str`
             The time string used for Pandas timestamp construction.
         """
-        return "14:30:00" if pre_market else "21:00:00"
+        return "09:30:00" if pre_market else "16:00:00"
 
     def _generate_rebalances(self):
         """
@@ -70,7 +70,7 @@ class EndOfMonthRebalance(Rebalance):
 
         rebalance_times = [
             pd.Timestamp(
-                "%s %s" % (date, self.market_time), tz=pytz.utc
+                "%s %s" % (date, self.market_time), tz='America/New_York'
             )
             for date in rebalance_dates
         ]

@@ -80,7 +80,7 @@ class WeeklyRebalance(Rebalance):
         `str`
             The string representation of the market time.
         """
-        return "14:30:00" if pre_market else "21:00:00"
+        return "09:30:00" if pre_market else "16:00:00"
 
     def _generate_rebalances(self):
         """
@@ -99,7 +99,7 @@ class WeeklyRebalance(Rebalance):
 
         rebalance_times = [
             pd.Timestamp(
-                "%s %s" % (date, self.pre_market_time), tz=pytz.utc
+                "%s %s" % (date, self.pre_market_time), tz='America/New_York'
             )
             for date in rebalance_dates
         ]

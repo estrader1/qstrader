@@ -23,8 +23,8 @@ class SimulatedExchange(Exchange):
 
         # TODO: Eliminate hardcoding of NYSE
         # TODO: Make these timezone-aware
-        self.open_dt = datetime.time(14, 30)
-        self.close_dt = datetime.time(21, 00)
+        self.open_dt = datetime.time(9, 30)  
+        self.close_dt = datetime.time(16, 0) 
 
     def is_open_at_datetime(self, dt):
         """
