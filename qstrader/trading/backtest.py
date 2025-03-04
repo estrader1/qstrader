@@ -188,7 +188,7 @@ class BacktestTradingSession(TradingSession):
             csv_dir = os.environ.get('QSTRADER_CSV_DATA_DIR')
 
         # TODO: Only equities are supported by QSTrader for now.
-        data_source = CSVDailyBarDataSource(csv_dir, Equity)
+        data_source = CSVDailyBarDataSource(csv_dir, Equity, adjust_prices=False)
 
         data_handler = BacktestDataHandler(
             self.universe, data_sources=[data_source]

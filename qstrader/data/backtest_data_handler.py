@@ -65,7 +65,7 @@ class BacktestDataHandler(object):
         return mid
 
     def get_assets_historical_range_close_price(
-        self, start_dt, end_dt, asset_symbols, adjusted=False
+        self, start_dt, end_dt, asset_symbols
     ):
         """
         """
@@ -73,7 +73,7 @@ class BacktestDataHandler(object):
         for ds in self.data_sources:
             try:
                 prices_df = ds.get_assets_historical_closes(
-                    start_dt, end_dt, asset_symbols, adjusted=adjusted
+                    start_dt, end_dt, asset_symbols
                 )
                 if prices_df is not None:
                     return prices_df

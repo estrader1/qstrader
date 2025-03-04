@@ -32,7 +32,7 @@ class CSVDailyBarDataSource(object):
         provided directory.
     """
 
-    def __init__(self, csv_dir, asset_type, adjust_prices=True, csv_symbols=None):
+    def __init__(self, csv_dir, asset_type, adjust_prices=False, csv_symbols=None):
         self.csv_dir = csv_dir
         self.asset_type = asset_type
         self.adjust_prices = adjust_prices
@@ -189,11 +189,11 @@ class CSVDailyBarDataSource(object):
             The converted DataFrames.
         """
         if settings.PRINT_EVENTS:
-            print("Adjusting pricing in CSV files...")
+            print("Loading pricing in CSV files...")
         asset_bid_ask_frames = {}
         for asset_symbol, bar_df in self.asset_bar_frames.items():
             if settings.PRINT_EVENTS:
-                print("Adjusting CSV file for symbol '%s'..." % asset_symbol)
+                print("Loading CSV file for symbol '%s'..." % asset_symbol)
             asset_bid_ask_frames[asset_symbol] = \
                 self._convert_bar_frame_into_bid_ask_df(bar_df)
         return asset_bid_ask_frames
