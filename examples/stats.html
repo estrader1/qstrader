@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Ag-Grid Portfolio Snapshots</title>
+    <!-- <script src="ag-grid-community.min.js"></script> -->
+    <script src="agem.js"></script>
+
+    <style>
+        body {
+            font-size: 10px; /* Reduced font size for the whole body */
+            background-color: #222;
+            color: #fff;
+        }
+
+        .ag-theme-alpine {
+            height: 500px;
+            width: 100%;
+             /* Reset font size for the grid */
+        }
+
+        .ag-theme-alpine {
+            /* Default dark mode for ag-Grid */
+            --ag-foreground-color: #fff;
+            --ag-background-color: #222;
+            --ag-header-background-color: #333;
+            --ag-odd-row-background-color: #333;
+            --ag-border-color: #555;
+            --ag-row-hover-color: #444;
+            
+        }
+
+
+        /* Toggle switch styles - Reduced size */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            -webkit-transition: .4s;
+            transition: .4s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            -webkit-transition: .4s;
+            transition: .4s;
+        }
+
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+
+        input:focus + .slider {
+            box-shadow: 0 0 1px #2196F3;
+        }
+
+        input:checked + .slider:before {
+            -webkit-transform: translateX(18px);
+            -ms-transform: translateX(18px);
+            transform: translateX(18px);
+        }
+
+        /* Rounded sliders */
+        .slider.round {
+            border-radius: 22px;
+        }
+
+        .slider.round:before {
+            border-radius: 50%;
+        }
+
+        /* General dark mode */
+        body.dark-mode {
+            background-color: #222;
+            color: #fff;
+        }
+
+        /* Style adjustments for other elements in dark mode if needed */
+        .dark-mode h1 {
+            color: #fff;
+        }
+
+        .dark-mode label {
+            color: #fff;
+        }
+
+        #fileInput {
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #555;
+        }
+    </style>
+</head>
+
+<body class="dark-mode">
+
+    <h1>Portfolio snapshots</h1>
+
+    <div>
+        <label class="switch">
+            <input type="checkbox" id="themeToggle" checked>
+            <span class="slider round"></span>
+        </label>
+        <label for="themeToggle">Dark Theme</label>
+
+        <label class="switch">
+            <input type="checkbox" id="percentageToggle">
+            <span class="slider round"></span>
+        </label>
+        <label for="percentageToggle">Show as Percentage</label>
+    </div>
+
+    <input type="file" id="fileInput" accept=".json">
+
+    <div id="myGrid" class="ag-theme-alpine"></div>
+
+    <script>
+        // Global variables
+        let gridApi;
+        let columnApi;
+        let isDarkTheme = true; // Dark theme is now default
+        let isPercentage = false;
+
+        const numberFormatter = (params) => {
+            if (!params.value) return ''; // Handle null/undefined values
+            const formatter = new Intl.NumberFormat('en-US'); // You can adjust the locale
+            return formatter.format(params.value);
+        };
+
+        const percentageFormatter = (params) => {
+            if (!params.value) return '';
+            return (params.value * 100).toFixed(2) + '%';
+        };
+
+        const gridOptions = {
+            columnDefs: [
+                { headerName: "Date", field: "date", width: 200 },
+                {
+                    headerName: "Cash",
+                    field: "cash",
+                    width: 150,
+                    valueFormatter: (params) => isPercentage ? percentageFormatter(params) : numberFormatter(params)
+                },
+                {
+                    headerName: "Assets",
+                    children: [],
+                }
+            ],
+            defaultColDef: {
+                sortable: true,
+                filter: true,
+                resizable: true,
+                valueFormatter: (params) => params.colDef.headerName !== 'Date' ? numberFormatter(params) : params.value //Apply only to number fields, not Date
+            },
+            rowData: [],
+            enableRangeSelection: true,
+            onGridReady: (params) => {
+                gridApi = params.api;
+                columnApi = params.columnApi;
+            },
+            getRowClassRules: {
+                'ag-theme-alpine-dark': () => isDarkTheme
+            },
+            onFirstDataRendered: (params) => {
+                //Size columns after initial data load
+                params.api.sizeColumnsToFit();
+            }
+        };
+
+        // Function to dynamically generate asset columns
+        function generateAssetColumns(data) {
+            const assetColumnDefs = [];
+            const allAssetKeys = new Set();
+
+            data.forEach(snapshot => {
+                if (snapshot.assets) {
+                    Object.keys(snapshot.assets).forEach(assetKey => allAssetKeys.add(assetKey));
+                }
+            });
+
+            allAssetKeys.forEach(assetKey => {
+                assetColumnDefs.push({
+                    headerName: assetKey,
+                    children: [
+                        { headerName: "Net Quantity", field: `assets.${assetKey}.net_quantity`, width: 120, valueFormatter: numberFormatter },
+                        {
+                            headerName: "Market Value", field: `assets.${assetKey}.market_value`, width: 150,
+                            valueFormatter: (params) => isPercentage ? percentageFormatter(params) : numberFormatter(params)
+                        },
+                        {
+                            headerName: "Current Price", field: `assets.${assetKey}.current_price`, width: 150,
+                            valueFormatter: numberFormatter // Always show as a number
+                        }
+                    ],
+                });
+            });
+
+            return assetColumnDefs;
+        }
+
+        // Function to dynamically create row data
+        function processPortfolioData(data) {
+            return data.map(snapshot => {
+                const row = {
+                    date: snapshot.date,
+                    cash: snapshot.cash,
+                    assets: snapshot.assets
+                };
+                return row;
+            });
+        }
+
+        function calculatePercentages(data) {
+            return data.map(row => {
+                let totalValue = row.cash || 0;
+                if (row.assets) {
+                    Object.values(row.assets).forEach(asset => {
+                        totalValue += asset.market_value || 0;
+                    });
+                }
+
+                const newRow = { ...row };
+
+                newRow.cash = row.cash ? row.cash / totalValue : 0;
+
+                if (newRow.assets) {
+                    for (const assetKey in newRow.assets) {
+                        newRow.assets[assetKey] = { ...newRow.assets[assetKey] }; // Copy the asset
+                        newRow.assets[assetKey].market_value = newRow.assets[assetKey].market_value ? newRow.assets[assetKey].market_value / totalValue : 0;
+
+                    }
+                }
+                return newRow;
+            });
+        }
+
+        // Initialize Grid
+        const gridDiv = document.querySelector('#myGrid');
+        const grid = new agGrid.Grid(gridDiv, gridOptions);
+
+        // Function to update the grid with new data
+        function updateGrid(portfolioSnapshots) {
+            let processedData = processPortfolioData(portfolioSnapshots);
+
+            if (isPercentage) {
+                processedData = calculatePercentages(processedData);
+            }
+
+            const assetColumns = generateAssetColumns(portfolioSnapshots);
+            gridOptions.columnDefs[2].children = assetColumns;
+
+            gridApi.setColumnDefs(gridOptions.columnDefs);
+            gridApi.setRowData(processedData);
+            gridApi.sizeColumnsToFit();
+        }
+
+        // File input event listener
+        document.getElementById('fileInput').addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    try {
+                        const jsonData = JSON.parse(e.target.result);
+                        const portfolioSnapshots = jsonData.portfolio_snapshots;
+                        updateGrid(portfolioSnapshots);
+                    } catch (error) {
+                        alert('Error parsing JSON file: ' + error);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // Theme toggle
+        document.getElementById('themeToggle').addEventListener('change', function () {
+            isDarkTheme = this.checked;
+            // gridDiv.classList.toggle('ag-theme-alpine-dark', isDarkTheme);
+            if (isDarkTheme) {
+                document.body.classList.add('dark-mode');
+                gridDiv.classList.add('ag-theme-alpine');
+            } else {
+                document.body.classList.remove('dark-mode');
+                gridDiv.classList.remove('ag-theme-alpine');
+            }
+
+            // Manually refresh the row classes
+            gridApi.refreshCells({ force: true });  //Important to force a refresh
+        });
+
+        // Percentage toggle
+        document.getElementById('percentageToggle').addEventListener('change', function () {
+            isPercentage = this.checked;
+            if (gridApi) {
+                // Re-process and update the grid with the new percentage data
+                const fileInput = document.getElementById("fileInput");
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    const reader = new FileReader();
+                    reader.onload = function (e) {
+                        try {
+                            const jsonData = JSON.parse(e.target.result);
+                            const portfolioSnapshots = jsonData.portfolio_snapshots;
+                            updateGrid(portfolioSnapshots);
+                        } catch (error) {
+                            alert('Error parsing JSON file: ' + error);
+                        }
+                    };
+                    reader.readAsText(file);
+                } else {
+                    alert("Please select a JSON File before using this option.");
+                }
+            }
+        });
+
+        // Initialize dark mode
+        document.getElementById('themeToggle').checked = true; // Set toggle to checked by default
+        // gridDiv.classList.add('ag-theme-alpine-dark');  // Initialize grid in dark mode
+        document.body.classList.add('dark-mode'); // Initialize the page in dark mode
+
+    </script>
+
+</body>
+
+</html>
