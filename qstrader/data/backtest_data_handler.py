@@ -63,6 +63,17 @@ class BacktestDataHandler(object):
             # TODO: Log this
             mid = np.nan
         return mid
+    
+    def get_asset_dividend(self, dt, asset_symbol):
+        dividend = 0.0
+        for ds in self.data_sources:
+            try:
+                dividend = ds.get_dividend(dt, asset_symbol)
+                if not np.isnan(dividend):
+                    return dividend
+            except Exception:
+                dividend = 0.0
+        return dividend
 
     def get_assets_historical_range_close_price(
         self, start_dt, end_dt, asset_symbols

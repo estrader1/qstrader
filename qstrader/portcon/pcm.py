@@ -46,6 +46,7 @@ class PortfolioConstructionModel(object):
         risk_model=None,
         cost_model=None,
         data_handler=None,
+
     ):
         self.broker = broker
         self.broker_portfolio_id = broker_portfolio_id
@@ -56,6 +57,8 @@ class PortfolioConstructionModel(object):
         self.risk_model = risk_model
         self.cost_model = cost_model
         self.data_handler = data_handler
+        self.recent_target_portfolio = None  # Store portfolio
+        self.recent_rebalance_dt = None  # Store the datetime
 
     def _obtain_full_asset_list(self, dt):
         """
@@ -322,6 +325,9 @@ class PortfolioConstructionModel(object):
         stats['target_portfolio'].append(
                 {'date': dt, 'event': event.event_type if event else None, 'portfolio': copy.deepcopy(target_portfolio_with_prices)}
             )
+
+        self.recent_target_portfolio = target_portfolio  # Store portfolio
+        self.recent_rebalance_dt = dt  # Store the datetime
 
         # Obtain current Broker account portfolio
         current_portfolio = self._obtain_current_portfolio()

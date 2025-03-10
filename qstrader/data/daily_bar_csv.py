@@ -40,6 +40,36 @@ class CSVDailyBarDataSource(object):
 
         self.asset_bar_frames = self._load_csvs_into_dfs()
         self.asset_bid_ask_frames = self._convert_bars_into_bid_ask_dfs()
+        self.dividend_frames = self._extract_dividends()
+
+
+    def _extract_dividends(self):
+        dividend_frames = {}
+        for asset_symbol, bar_df in self.asset_bar_frames.items():
+            if 'Dividends' in bar_df.columns:
+                dividend_df = bar_df[['Dividends']].dropna()  # Keep only non-NaN dividends
+                # Set the index (date) to market close (16:00:00 New York time) using Timedelta
+                dividend_df.index = dividend_df.index + pd.Timedelta(hours=16)
+                
+
+                dividend_frames[asset_symbol] = dividend_df
+            else:
+                if settings.PRINT_EVENTS:
+                    print(f"No 'Dividends' column found for {asset_symbol}")
+                dividend_frames[asset_symbol] = pd.DataFrame(columns=['Dividends'])  # Empty frame if no dividends
+        return dividend_frames
+
+    @functools.lru_cache(maxsize=1024 * 1024)
+    def get_dividend(self, dt, asset):
+        if asset in self.dividend_frames and not self.dividend_frames[asset].empty:
+            div_df = self.dividend_frames[asset]
+            div_series = div_df.iloc[div_df.index.get_indexer([dt])]['Dividends']
+            try:
+                dividend = div_series.iloc[0]
+            except IndexError:  # Changed from KeyError to IndexError
+                return 0.0
+            return dividend if not np.isnan(dividend) else 0.0
+        return 0.0
 
     def _obtain_asset_csv_files(self):
         """
@@ -216,7 +246,7 @@ class CSVDailyBarDataSource(object):
             The bid price.
         """
         bid_ask_df = self.asset_bid_ask_frames[asset]
-        bid_series = bid_ask_df.iloc[bid_ask_df.index.get_indexer([dt], method='pad')]['Bid']
+        bid_series = bid_ask_df.iloc[bid_ask_df.index.get_indexer([dt])]['Bid']
         try:
             bid = bid_series.iloc[0]
         except KeyError:  # Before start date
@@ -241,7 +271,7 @@ class CSVDailyBarDataSource(object):
             The ask price.
         """
         bid_ask_df = self.asset_bid_ask_frames[asset]
-        ask_series = bid_ask_df.iloc[bid_ask_df.index.get_indexer([dt], method='pad')]['Ask']
+        ask_series = bid_ask_df.iloc[bid_ask_df.index.get_indexer([dt])]['Ask']
         try:
             ask = ask_series.iloc[0]
         except KeyError:  # Before start date

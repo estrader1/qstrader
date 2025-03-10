@@ -20,7 +20,9 @@ if __name__ == "__main__":
     strategy_symbols = ['SPY', 'AGG']
     strategy_assets = ['EQ:%s' % symbol for symbol in strategy_symbols]
     strategy_universe = StaticUniverse(strategy_assets)
-
+    
+    os.environ["QSTRADER_CSV_DATA_DIR"] = '/Users/snk/pcode/archive/qstrader/data'
+    
     # To avoid loading all CSV files in the directory, set the
     # data source to load only those provided symbols
     csv_dir = os.environ.get('QSTRADER_CSV_DATA_DIR', '.')
@@ -40,7 +42,8 @@ if __name__ == "__main__":
         rebalance='end_of_month',
         long_only=True,
         cash_buffer_percentage=0.01,
-        data_handler=data_handler
+        data_handler=data_handler,
+        process_dividends=True
     )
     strategy_backtest.run()
 

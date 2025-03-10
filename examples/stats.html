@@ -1,3 +1,6 @@
+--- START OF FILE merged_files (4).txt ---
+
+<stats.html>
 <!DOCTYPE html>
 <html>
 
@@ -8,7 +11,8 @@
 
     <style>
         body {
-            font-size: 10px; /* Reduced font size for the whole body */
+            font-size: 10px;
+            /* Reduced font size for the whole body */
             background-color: #222;
             color: #fff;
         }
@@ -16,7 +20,7 @@
         .ag-theme-alpine {
             height: 500px;
             width: 100%;
-             /* Reset font size for the grid */
+            /* Reset font size for the grid */
         }
 
         .ag-theme-alpine {
@@ -27,7 +31,7 @@
             --ag-odd-row-background-color: #333;
             --ag-border-color: #555;
             --ag-row-hover-color: #444;
-            
+
         }
 
 
@@ -112,6 +116,44 @@
             color: #fff;
             border: 1px solid #555;
         }
+
+        /* Tabs container */
+        .tab {
+            overflow: hidden;
+            border: 1px solid #555;
+            background-color: #333;
+        }
+
+        /* Style the buttons inside the tab */
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            font-size: 17px;
+            color: #fff;
+        }
+
+        /* Change background color of buttons on hover */
+        .tab button:hover {
+            background-color: #444;
+        }
+
+        /* Create an active/current tablink class */
+        .tab button.active {
+            background-color: #555;
+        }
+
+        /* Style the tab content */
+        .tabcontent {
+            display: none;
+            padding: 6px 12px;
+            border: 1px solid #555;
+            border-top: none;
+        }
     </style>
 </head>
 
@@ -135,12 +177,29 @@
 
     <input type="file" id="fileInput" accept=".json">
 
-    <div id="myGrid" class="ag-theme-alpine"></div>
+    <!-- Tab links -->
+    <div class="tab">
+        <button class="tablinks active" onclick="openTab(event, 'Portfolio')">Portfolio</button>
+        <button class="tablinks" onclick="openTab(event, 'Dividends')">Dividends</button>
+    </div>
+
+    <!-- Tab content -->
+    <div id="Portfolio" class="tabcontent" style="display: block;">
+        <div id="portfolioGrid" class="ag-theme-alpine"></div>
+    </div>
+
+    <div id="Dividends" class="tabcontent">
+        <div id="dividendsGrid" class="ag-theme-alpine"></div>
+    </div>
+
 
     <script>
         // Global variables
-        let gridApi;
-        let columnApi;
+        let portfolioGridApi;
+        let portfolioColumnApi;
+        let dividendsGridApi;
+        let dividendsColumnApi;
+
         let isDarkTheme = true; // Dark theme is now default
         let isPercentage = false;
 
@@ -155,7 +214,8 @@
             return (params.value * 100).toFixed(2) + '%';
         };
 
-        const gridOptions = {
+        // Portfolio Grid Options
+        const portfolioGridOptions = {
             columnDefs: [
                 { headerName: "Date", field: "date", width: 200 },
                 {
@@ -178,8 +238,8 @@
             rowData: [],
             enableRangeSelection: true,
             onGridReady: (params) => {
-                gridApi = params.api;
-                columnApi = params.columnApi;
+                portfolioGridApi = params.api;
+                portfolioColumnApi = params.columnApi;
             },
             getRowClassRules: {
                 'ag-theme-alpine-dark': () => isDarkTheme
@@ -189,6 +249,45 @@
                 params.api.sizeColumnsToFit();
             }
         };
+
+        // Dividends Grid Options
+        const dividendsGridOptions = {
+            columnDefs: [
+                { headerName: "Date", field: "date", width: 200 },
+                { headerName: "Total Cash Dividend", field: "total_cash_dividend", valueFormatter: numberFormatter },
+                { headerName: "Total Reinvested Quantity", field: "total_reinvested_quantity", valueFormatter: numberFormatter },
+                {
+                    headerName: "Dividends",
+                    children: [
+                        { headerName: "Asset", field: "asset" },
+                        { headerName: "Dividend", field: "dividend", valueFormatter: numberFormatter },
+                        { headerName: "Quantity", field: "quantity", valueFormatter: numberFormatter },
+                        { headerName: "Cash Dividend", field: "cash_dividend", valueFormatter: numberFormatter },
+                        { headerName: "Reinvest Price", field: "reinvest_price", valueFormatter: numberFormatter },
+                        { headerName: "Reinvested Quantity", field: "reinvested_quantity", valueFormatter: numberFormatter },
+                    ]
+                }
+
+            ],
+            defaultColDef: {
+                sortable: true,
+                filter: true,
+                resizable: true,
+            },
+            rowData: [],
+            onGridReady: (params) => {
+                dividendsGridApi = params.api;
+                dividendsColumnApi = params.columnApi;
+            },
+            getRowClassRules: {
+                'ag-theme-alpine-dark': () => isDarkTheme
+            },
+
+            onFirstDataRendered: (params) => {
+                params.api.sizeColumnsToFit();
+            }
+        }
+
 
         // Function to dynamically generate asset columns
         function generateAssetColumns(data) {
@@ -257,12 +356,17 @@
             });
         }
 
-        // Initialize Grid
-        const gridDiv = document.querySelector('#myGrid');
-        const grid = new agGrid.Grid(gridDiv, gridOptions);
+        // Initialize Portfolio Grid
+        const portfolioGridDiv = document.querySelector('#portfolioGrid');
+        const portfolioGrid = new agGrid.Grid(portfolioGridDiv, portfolioGridOptions);
 
-        // Function to update the grid with new data
-        function updateGrid(portfolioSnapshots) {
+        // Initialize Dividends Grid
+        const dividendsGridDiv = document.querySelector('#dividendsGrid');
+        const dividendsGrid = new agGrid.Grid(dividendsGridDiv, dividendsGridOptions);
+
+
+        // Function to update the portfolio grid with new data
+        function updatePortfolioGrid(portfolioSnapshots) {
             let processedData = processPortfolioData(portfolioSnapshots);
 
             if (isPercentage) {
@@ -270,79 +374,138 @@
             }
 
             const assetColumns = generateAssetColumns(portfolioSnapshots);
-            gridOptions.columnDefs[2].children = assetColumns;
+            portfolioGridOptions.columnDefs[2].children = assetColumns;
 
-            gridApi.setColumnDefs(gridOptions.columnDefs);
-            gridApi.setRowData(processedData);
-            gridApi.sizeColumnsToFit();
+            portfolioGridApi.setColumnDefs(portfolioGridOptions.columnDefs);
+            portfolioGridApi.setRowData(processedData);
+            portfolioGridApi.sizeColumnsToFit();
         }
+
+        // Function to update dividends grid
+        function updateDividendsGrid(dividendsData) {
+            if (!dividendsData) {
+                dividendsGridApi.setRowData([]);
+                return;
+            }
+
+            // Flatten the dividends data for the grid
+            const flattenedData = [];
+            dividendsData.forEach(item => {
+                if (item.dividends && Array.isArray(item.dividends)) {
+                    item.dividends.forEach(div => {
+                        flattenedData.push({
+                            date: item.date,
+                            total_cash_dividend: item.total_cash_dividend,
+                            total_reinvested_quantity: item.total_reinvested_quantity,
+                            asset: div.asset,
+                            dividend: div.dividend,
+                            quantity: div.quantity,
+                            cash_dividend: div.cash_dividend,
+                            reinvest_price: div.reinvest_price,
+                            reinvested_quantity: div.reinvested_quantity
+                        });
+                    });
+                }
+            });
+            dividendsGridApi.setRowData(flattenedData);
+            dividendsGridApi.sizeColumnsToFit();
+        }
+
+
+        // Function to read data and update grids
+        function readAndUpdate(file) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const jsonData = JSON.parse(e.target.result);
+                    const portfolioSnapshots = jsonData.portfolio_snapshots;
+                    const dividendsData = jsonData.dividends;
+
+                    updatePortfolioGrid(portfolioSnapshots);
+                    updateDividendsGrid(dividendsData);
+                } catch (error) {
+                    alert('Error parsing JSON file: ' + error);
+                }
+            };
+            reader.readAsText(file);
+        }
+
 
         // File input event listener
         document.getElementById('fileInput').addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (file) {
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    try {
-                        const jsonData = JSON.parse(e.target.result);
-                        const portfolioSnapshots = jsonData.portfolio_snapshots;
-                        updateGrid(portfolioSnapshots);
-                    } catch (error) {
-                        alert('Error parsing JSON file: ' + error);
-                    }
-                };
-                reader.readAsText(file);
+                readAndUpdate(file);
             }
         });
 
         // Theme toggle
         document.getElementById('themeToggle').addEventListener('change', function () {
             isDarkTheme = this.checked;
-            // gridDiv.classList.toggle('ag-theme-alpine-dark', isDarkTheme);
+            // portfolioGridDiv.classList.toggle('ag-theme-alpine-dark', isDarkTheme);
+            // dividendsGridDiv.classList.toggle('ag-theme-alpine-dark', isDarkTheme);
+
             if (isDarkTheme) {
                 document.body.classList.add('dark-mode');
-                gridDiv.classList.add('ag-theme-alpine');
+                portfolioGridDiv.classList.add('ag-theme-alpine');
+                dividendsGridDiv.classList.add('ag-theme-alpine');
             } else {
                 document.body.classList.remove('dark-mode');
-                gridDiv.classList.remove('ag-theme-alpine');
+                portfolioGridDiv.classList.remove('ag-theme-alpine');
+                dividendsGridDiv.classList.remove('ag-theme-alpine');
             }
 
-            // Manually refresh the row classes
-            gridApi.refreshCells({ force: true });  //Important to force a refresh
+            // Manually refresh the row classes on both grids
+            if (portfolioGridApi) {
+              portfolioGridApi.refreshCells({ force: true });  //Important to force a refresh
+            }
+            if (dividendsGridApi) {
+              dividendsGridApi.refreshCells({ force: true });
+            }
+
         });
 
         // Percentage toggle
         document.getElementById('percentageToggle').addEventListener('change', function () {
             isPercentage = this.checked;
-            if (gridApi) {
-                // Re-process and update the grid with the new percentage data
+            if (portfolioGridApi) {
+                // Re-process and update the portfolio grid with the new percentage data
                 const fileInput = document.getElementById("fileInput");
                 if (fileInput.files.length > 0) {
                     const file = fileInput.files[0];
-                    const reader = new FileReader();
-                    reader.onload = function (e) {
-                        try {
-                            const jsonData = JSON.parse(e.target.result);
-                            const portfolioSnapshots = jsonData.portfolio_snapshots;
-                            updateGrid(portfolioSnapshots);
-                        } catch (error) {
-                            alert('Error parsing JSON file: ' + error);
-                        }
-                    };
-                    reader.readAsText(file);
+                    readAndUpdate(file); // Re-read and update both grids.  Simplest solution.
+
                 } else {
                     alert("Please select a JSON File before using this option.");
                 }
             }
         });
 
+        // Tab switching function
+        function openTab(evt, tabName) {
+            let i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+
         // Initialize dark mode
         document.getElementById('themeToggle').checked = true; // Set toggle to checked by default
-        // gridDiv.classList.add('ag-theme-alpine-dark');  // Initialize grid in dark mode
         document.body.classList.add('dark-mode'); // Initialize the page in dark mode
+      //  portfolioGridDiv.classList.add('ag-theme-alpine'); //initialize in dark-mode
+      // dividendsGridDiv.classList.add('ag-theme-alpine'); //initialize in dark-mode
+
 
     </script>
 
 </body>
 
 </html>
+</stats.html>

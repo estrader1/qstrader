@@ -19,6 +19,7 @@ from qstrader.system.rebalance.end_of_month import EndOfMonthRebalance
 from qstrader.system.rebalance.weekly import WeeklyRebalance
 from qstrader.trading.trading_session import TradingSession
 from qstrader import settings
+from qstrader.dividend.dividend_model import DividendModel
 
 DEFAULT_ACCOUNT_NAME = 'Backtest Simulated Broker Account'
 DEFAULT_PORTFOLIO_ID = '000001'
@@ -84,6 +85,8 @@ class BacktestTradingSession(TradingSession):
         fee_model=ZeroFeeModel(),
         burn_in_dt=None,
         data_handler=None,
+        process_dividends = False,
+        reinvest_dividends = False,
         **kwargs
     ):
         self.start_dt = start_dt
@@ -121,7 +124,31 @@ class BacktestTradingSession(TradingSession):
         self.qts = self._create_quant_trading_system(**kwargs)
         self.equity_curve = []
         self.target_allocations = []
+        self.process_dividends = process_dividends
+        self.reinvest_dividends = reinvest_dividends
 
+        if self.process_dividends:
+            self.dividend_model = self._create_dividend_model()
+        else:
+            self.dividend_model = None
+
+
+    def _create_dividend_model(self):
+        """
+        Creates the DividendModel instance if process_dividends is True.
+        """
+        
+        return DividendModel(
+            data_handler=self.data_handler,
+            broker=self.broker,
+            portfolio_id=self.portfolio_id,
+            process_dividends=self.process_dividends,
+            reinvest_dividends=self.reinvest_dividends,
+            universe=self.universe,
+            qts=self.qts
+        )
+
+        
     def _is_rebalance_event(self, dt):
         """
         Checks if the provided timestamp is part of the rebalance
@@ -519,6 +546,7 @@ class BacktestTradingSession(TradingSession):
             'executed_orders': [],
             'equity_curve': [],
             'portfolio_snapshots': [],
+            'dividends': [], 
         }
 
         self.stats = stats
@@ -575,6 +603,10 @@ class BacktestTradingSession(TradingSession):
             # Out of market hours we want a daily
             # performance update, but only if we
             # are past the 'burn in' period
+
+            if self.dividend_model is not None and event.event_type == "market_close":
+                self.dividend_model(dt, event=event, stats=stats)
+
             if event.event_type == "market_close":
                 if self.burn_in_dt is not None:
                     if dt >= self.burn_in_dt:
