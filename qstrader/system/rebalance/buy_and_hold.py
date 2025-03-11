@@ -15,8 +15,9 @@ class BuyAndHoldRebalance(Rebalance):
         The starting datetime of the buy and hold rebalance.
     """
 
-    def __init__(self, start_dt):
+    def __init__(self, start_dt,data_handler, pre_market=False):
         self.start_dt = start_dt
+        self.data_handler = data_handler
         self.rebalances = self._generate_rebalances()
 
     def _is_business_day(self):

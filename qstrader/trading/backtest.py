@@ -257,7 +257,7 @@ class BacktestTradingSession(TradingSession):
             The simulation engine generating simulation timestamps.
         """
         return DailyBusinessDaySimulationEngine(
-            self.start_dt, self.end_dt, pre_market=False, post_market=False
+            self.start_dt, self.end_dt, self.data_handler, pre_market=False, post_market=False
         )
 
     def _create_rebalance_event_times(self):
@@ -270,18 +270,20 @@ class BacktestTradingSession(TradingSession):
         `List[pd.Timestamp]`
             The list of rebalance timestamps.
         """
-        if self.rebalance == 'buy_and_hold':
-            rebalancer = BuyAndHoldRebalance(self.start_dt)
+        if isinstance(self.rebalance, list):
+            return self.rebalance
+        elif self.rebalance == 'buy_and_hold':
+            rebalancer = BuyAndHoldRebalance(self.start_dt, self.data_handler)
         elif self.rebalance == 'daily':
             rebalancer = DailyRebalance(
-                self.start_dt, self.end_dt
+                self.start_dt, self.end_dt, self.data_handler
             )
         elif self.rebalance == 'weekly':
             rebalancer = WeeklyRebalance(
-                self.start_dt, self.end_dt, self.rebalance_weekday
+                self.start_dt, self.end_dt, self.rebalance_weekday, self.data_handler
             )
         elif self.rebalance == 'end_of_month':
-            rebalancer = EndOfMonthRebalance(self.start_dt, self.end_dt)
+            rebalancer = EndOfMonthRebalance(self.start_dt, self.end_dt, self.data_handler)
         else:
             raise ValueError(
                 'Unknown rebalance frequency "%s" provided.' % self.rebalance

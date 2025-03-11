@@ -34,7 +34,7 @@ class DailyBusinessDaySimulationEngine(SimulationEngine):
         Whether to include a post-market event
     """
 
-    def __init__(self, starting_day, ending_day, pre_market=True, post_market=True):
+    def __init__(self, starting_day, ending_day, data_handler, pre_market=True, post_market=True):
         if ending_day < starting_day:
             raise ValueError(
                 "Ending date time %s is earlier than starting date time %s. "
@@ -42,8 +42,9 @@ class DailyBusinessDaySimulationEngine(SimulationEngine):
                 "instance." % (ending_day, starting_day)
             )
 
-        self.starting_day = starting_day
-        self.ending_day = ending_day
+        self.starting_day = starting_day.normalize()
+        self.ending_day = ending_day.normalize()
+        self.data_handler = data_handler # Store data_handler
         self.pre_market = pre_market
         self.post_market = post_market
         self.business_days = self._generate_business_days()
@@ -58,10 +59,26 @@ class DailyBusinessDaySimulationEngine(SimulationEngine):
         `list[pd.Timestamp]`
             The business day range list.
         """
-        days = pd.date_range(
+        all_days = pd.date_range(
             self.starting_day, self.ending_day, freq=BDay()
         )
-        return days
+
+        if self.data_handler and self.data_handler.data_sources:
+            longest_asset = self.data_handler.get_longest_asset()
+            if longest_asset is None:
+                return []  # No data available
+
+            # Use .asset_bar_frames for consistency
+            available_days = self.data_handler.data_sources[0].asset_bar_frames[longest_asset].index
+
+            # Filter all_days to keep only those present in available_days
+            filtered_days = [
+                day for day in all_days if day in available_days
+            ]
+            return pd.DatetimeIndex(filtered_days)  # Return as DatetimeIndex
+
+        else:
+            return pd.DatetimeIndex([])  # No data handler, return empty list
 
     def __iter__(self):
         """

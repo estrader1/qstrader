@@ -27,10 +27,12 @@ class DailyRebalance(Rebalance):
         self,
         start_date,
         end_date,
+        data_handler,
         pre_market=False
     ):
         self.start_date = start_date
         self.end_date = end_date
+        self.data_handler = data_handler
         self.market_time = self._set_market_time(pre_market)
         self.rebalances = self._generate_rebalances()
 
@@ -53,23 +55,31 @@ class DailyRebalance(Rebalance):
         return "09:30:00" if pre_market else "16:00:00" 
 
     def _generate_rebalances(self):
-        """
-        Output the rebalance timestamp list.
 
-        Returns
-        -------
-        `list[pd.Timestamp]`
-            The list of rebalance timestamps.
-        """
         rebalance_dates = pd.bdate_range(
-            start=self.start_date, end=self.end_date,
+            start=self.start_date, end=self.end_date
         )
 
-        rebalance_times = [
-            pd.Timestamp(
-                "%s %s" % (date, self.market_time), tz='America/New_York'
-            )
-            for date in rebalance_dates
-        ]
+        if self.data_handler.data_sources:
 
-        return rebalance_times
+            longest_asset = self.data_handler.get_longest_asset()
+            
+            if longest_asset is None:  # Handle case where no data is loaded
+                return []
+            
+            available_days = self.data_handler.data_sources[0].asset_bar_frames[longest_asset].index  # Use the first data frame
+            # Filter rebalance_dates first
+            filtered_rebalance_dates = [
+                date for date in rebalance_dates if date in available_days
+            ]
+
+            # Then create rebalance_times
+            rebalance_times = [
+                pd.Timestamp(
+                    "%s %s" % (date, self.market_time), tz='America/New_York'
+                )
+                for date in filtered_rebalance_dates
+            ]
+            return rebalance_times
+        else:
+            return []

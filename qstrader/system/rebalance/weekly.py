@@ -30,11 +30,13 @@ class WeeklyRebalance(Rebalance):
         start_date,
         end_date,
         weekday,
+        data_handler,
         pre_market=False
     ):
         self.weekday = self._set_weekday(weekday)
         self.start_date = start_date
         self.end_date = end_date
+        self.data_handler = data_handler
         self.pre_market_time = self._set_market_time(pre_market)
         self.rebalances = self._generate_rebalances()
 
@@ -83,25 +85,40 @@ class WeeklyRebalance(Rebalance):
         return "09:30:00" if pre_market else "16:00:00"
 
     def _generate_rebalances(self):
-        """
-        Output the rebalance timestamp list.
-
-        Returns
-        -------
-        `list[pd.Timestamp]`
-            The list of rebalance timestamps.
-        """
         rebalance_dates = pd.date_range(
             start=self.start_date,
             end=self.end_date,
-            freq='W-%s' % self.weekday
+            freq=f'W-{self.weekday}'
         )
+        if self.data_handler.data_sources:
+            
+            longest_asset = self.data_handler.get_longest_asset()
+            
+            if longest_asset is None:
+                return []
+            
+            available_days = self.data_handler.data_sources[0].asset_bar_frames[longest_asset].index
 
-        rebalance_times = [
-            pd.Timestamp(
-                "%s %s" % (date, self.pre_market_time), tz='America/New_York'
-            )
-            for date in rebalance_dates
-        ]
+            filtered_rebalance_dates = []
+            for date in rebalance_dates:
+                if date in available_days:
+                    filtered_rebalance_dates.append(date)
+                else:
+                    # Find the next available trading day within the same week
+                    next_day = date + pd.Timedelta(days=1)
+                    while next_day.week == date.week and next_day <= self.end_date:
+                        if next_day in available_days:
+                            filtered_rebalance_dates.append(next_day)
+                            break  # Important: Exit inner loop once a valid day is found
+                        next_day += pd.Timedelta(days=1)
+            #convert to time
+            rebalance_times = [
+                pd.Timestamp(
+                    "%s %s" % (date, self.pre_market_time), tz='America/New_York'
+                )
+                for date in filtered_rebalance_dates
+            ]
+            return rebalance_times
 
-        return rebalance_times
+        else:
+            return []

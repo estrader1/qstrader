@@ -28,10 +28,12 @@ class EndOfMonthRebalance(Rebalance):
         self,
         start_dt,
         end_dt,
+        data_handler,
         pre_market=False
     ):
         self.start_dt = start_dt
         self.end_dt = end_dt
+        self.data_handler = data_handler
         self.market_time = self._set_market_time(pre_market)
         self.rebalances = self._generate_rebalances()
 
@@ -53,25 +55,32 @@ class EndOfMonthRebalance(Rebalance):
         return "09:30:00" if pre_market else "16:00:00"
 
     def _generate_rebalances(self):
-        """
-        Utilise the Pandas date_range method to create the appropriate
-        list of rebalance timestamps.
+        if self.data_handler.data_sources:
 
-        Returns
-        -------
-        `List[pd.Timestamp]`
-            The list of rebalance timestamps.
-        """
-        rebalance_dates = pd.date_range(
-            start=self.start_dt,
-            end=self.end_dt,
-            freq='BME'
-        )
+            longest_asset = self.data_handler.get_longest_asset()
+            
+            if longest_asset is None:
+                return []
+            
+            available_days = self.data_handler.data_sources[0].asset_bar_frames[longest_asset].index
+            
+            rebalance_dates = []
+            for (year, month), month_df in available_days.to_series().groupby([available_days.year, available_days.month]):
+                last_day = month_df.index.max()  # Last available day of the month
+                rebalance_dates.append(last_day)
 
-        rebalance_times = [
-            pd.Timestamp(
-                "%s %s" % (date, self.market_time), tz='America/New_York'
-            )
-            for date in rebalance_dates
-        ]
-        return rebalance_times
+            # Ensure rebalances are within start/end date range
+            filtered_rebalance_dates = [
+                date for date in rebalance_dates
+                if self.start_dt.date() <= date.date() <= self.end_dt.date()
+            ]
+
+            rebalance_times = [
+                 pd.Timestamp(
+                    "%s %s" % (date, self.market_time), tz='America/New_York'
+                )
+                for date in filtered_rebalance_dates
+            ]
+            return rebalance_times
+        else:
+            return []

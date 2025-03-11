@@ -1,6 +1,3 @@
---- START OF FILE merged_files (4).txt ---
-
-<stats.html>
 <!DOCTYPE html>
 <html>
 
@@ -224,6 +221,27 @@
                     width: 150,
                     valueFormatter: (params) => isPercentage ? percentageFormatter(params) : numberFormatter(params)
                 },
+                {  // ADDED TOTAL MV COLUMN
+                    headerName: "Total MV",
+                    valueGetter: (params) => {
+                        let total = params.data.cash || 0; // Start with cash, handle null/undefined
+                        if (params.data.assets) {
+                            for (const assetKey in params.data.assets) {
+                                if (params.data.assets.hasOwnProperty(assetKey)) {
+                                     total += params.data.assets[assetKey].market_value || 0; //Sum market values.
+                                }
+                            }
+                        }
+
+                         if (isPercentage) {
+                           //params.data.totalMV = total;  //Store the *UNSCALED* total
+                            return total; //value will be processed by the formatter.
+                         }
+                        return total;
+                    },
+                    valueFormatter: (params) => isPercentage ? percentageFormatter(params) : numberFormatter(params), //Use the correct formatter
+                    width: 150
+                },
                 {
                     headerName: "Assets",
                     children: [],
@@ -374,7 +392,7 @@
             }
 
             const assetColumns = generateAssetColumns(portfolioSnapshots);
-            portfolioGridOptions.columnDefs[2].children = assetColumns;
+            portfolioGridOptions.columnDefs[3].children = assetColumns; //Use index 3, to account for new column.
 
             portfolioGridApi.setColumnDefs(portfolioGridOptions.columnDefs);
             portfolioGridApi.setRowData(processedData);
@@ -508,4 +526,3 @@
 </body>
 
 </html>
-</stats.html>
